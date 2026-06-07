@@ -1,80 +1,23 @@
 use std::sync::Arc;
 
-use axum::{Json, extract::State, extract::Path, http::StatusCode, response::IntoResponse};
+use axum::{Json, extract::State, http::StatusCode, response::IntoResponse};
 use uuid::Uuid;
 use serde_json::json;
 
-use crate::{AppState, model::GameModel, schema::GameSchema};
+use crate::{AppState, schema::GameSchema};
 
 pub async fn create_game_handler(
-    State(data): State<Arc<AppState>>,
-    Json(body): Json<GameSchema>,
+    State(_data): State<Arc<AppState>>,
+    Json(_body): Json<GameSchema>,
 ) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
     let id = Uuid::new_v4();
-    let game = sqlx::query_as!(
-        GameModel,
-        r#"INSERT INTO games (id, name, creator, plays) VALUES ($1, $2, $3, $4) RETURNING *"#,
-        &id,
-        &body.name,
-        &body.creator,
-        &body.plays
-    )
-    .fetch_one(&data.db)
-    .await
-    .map_err(|e| e.to_string());
-
-    if let Err(err) = game {
-        if err.to_string().contains("duplicate key value") {
-            let error_response = serde_json::json!({
-            "status": "error", "message": "Game already exists",
-            });
-            return Err((StatusCode::CONFLICT, Json(error_response)));
-        }
-
-        return Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"status": "error", "message": format!("{:?}", err)})),
-        ));
-    }
 
     let game_response = json!({
     "status": "success",
     "data": json!({
-    "game": game
+        "id": id
     })
     });
 
     Ok(Json(game_response))
-}
-
-pub async fn get_game_handler(
-    Path(game_id): Path<Uuid>,
-    State(data): State<Arc<AppState>>,
-) -> Result<impl IntoResponse, (StatusCode, Json<serde_json::Value>)> {
-    let query_result = sqlx::query_as!(GameModel, r#"SELECT * FROM games WHERE id = $1"#, &game_id)
-        .fetch_one(&data.db)
-        .await;
-
-    match query_result {
-        Ok(game) => {
-            let game_response = serde_json::json!({
-                "status": "success",
-                "data": serde_json::json!({
-                    "game": game
-                })
-            });
-            Ok(Json(game_response))
-        }
-        Err(sqlx::Error::RowNotFound) => {
-            let error_response = serde_json::json!({
-                "status": "fail",
-                "message": format!("Game with ID: {} not found", game_id)
-            });
-            Err((StatusCode::NOT_FOUND, Json(error_response)))
-        }
-        Err(e) => Err((
-            StatusCode::INTERNAL_SERVER_ERROR,
-            Json(json!({"status":"error","message": format!("{:?}", e)})),
-        )),
-    }
 }
