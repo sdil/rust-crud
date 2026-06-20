@@ -7,9 +7,9 @@ use tokio::signal;
 use crate::route::create_router;
 
 mod handlers;
-mod model;
 mod route;
 mod schema;
+mod entity;
 
 pub struct AppState {
     db: DatabaseConnection,
@@ -17,10 +17,9 @@ pub struct AppState {
 
 #[tokio::main]
 async fn main() {
-    let db: DatabaseConnection = Database::connect("sqlite::memory:").await.expect("Couldnot connect to DB");
+    let db: DatabaseConnection = Database::connect("sqlite://crud.db").await.expect("Could not connect to DB");
     let app = create_router(Arc::new(AppState { db: db.clone() }));
 
-    // listen globally on port 3000
     let listener = tokio::net::TcpListener::bind("0.0.0.0:3000").await.unwrap();
     println!("server started at localhost:3000");
     axum::serve(listener, app)
